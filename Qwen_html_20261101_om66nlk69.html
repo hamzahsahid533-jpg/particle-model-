@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<title>Particle Zoom · Into the Invisible</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060a1a; --ink:#eef3ff; --muted:#a3b3d9;
+  --blue:#5aa9ff; --cyan:#2fe0d0; --pink:#ff6ec7; --gold:#ffc857; --violet:#a78bfa;
+  --card:rgba(255,255,255,.055); --line:rgba(255,255,255,.13);
+}
+html,body{height:100%;background:var(--bg);color:var(--ink);
+  font-family:'Outfit',system-ui,sans-serif;overflow:hidden}
+body::before{content:'';position:fixed;inset:-20%;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(45% 45% at 15% 20%, rgba(90,169,255,.18), transparent 60%),
+    radial-gradient(40% 40% at 85% 15%, rgba(255,110,199,.14), transparent 60%),
+    radial-gradient(50% 50% at 70% 90%, rgba(47,224,208,.14), transparent 60%);
+  animation:drift 24s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate3d(3%,-3%,0) scale(1.12)}}
+
+#app{position:relative;z-index:1;width:100vw;height:100vh;
+  display:grid;grid-template-rows:auto 1fr auto;gap:14px;padding:22px 30px 18px}
+
+/* HEADER */
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+.title{display:flex;flex-direction:column;gap:6px}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;font-family:'Space Grotesk',sans-serif;
+  font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);
+  background:rgba(47,224,208,.10);border:1px solid rgba(47,224,208,.28);
+  padding:5px 13px;border-radius:999px;width:fit-content}
+.eyebrow b{color:#fff;font-weight:700}
+h1{font-size:38px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.grad{background:linear-gradient(100deg,var(--blue),var(--cyan) 45%,var(--pink));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.keyq{max-width:420px;background:var(--card);border:1px solid var(--line);
+  border-radius:14px;padding:12px 16px;backdrop-filter:blur(6px)}
+.keyq .tag{font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--gold);margin-bottom:5px}
+.keyq p{font-size:15px;line-height:1.4;color:#dbe4ff;font-weight:300}
+.keyq b{color:#fff;font-weight:600}
+
+/* STAGE */
+#stage{position:relative;border-radius:20px;overflow:hidden;
+  background:radial-gradient(120% 120% at 50% 0%,rgba(255,255,255,.06),rgba(0,0,0,.4));
+  border:1px solid var(--line);box-shadow:inset 0 0 60px rgba(0,0,0,.5),0 20px 60px rgba(0,0,0,.4)}
+canvas{display:block;width:100%;height:100%}
+
+/* OVERLAYS */
+#hud{position:absolute;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;
+  align-items:flex-start;pointer-events:none;z-index:3}
+#stageLabel{background:rgba(10,16,40,.82);backdrop-filter:blur(10px);
+  border:1px solid var(--line);border-radius:12px;padding:10px 14px;pointer-events:auto}
+#stageLabel .n{font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--cyan);margin-bottom:3px}
+#stageLabel h3{font-size:20px;font-weight:700;color:#fff;margin-bottom:3px}
+#stageLabel p{font-size:13.5px;color:var(--muted);max-width:320px;line-height:1.4}
+
+#mag{background:rgba(10,16,40,.82);backdrop-filter:blur(10px);border:1px solid var(--line);
+  border-radius:12px;padding:10px 14px;text-align:right;pointer-events:auto}
+#mag .n{font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--gold);margin-bottom:3px}
+#mag .v{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;color:#fff}
+#mag .u{font-size:13px;color:var(--muted);margin-left:4px}
+
+/* ZOOM INDICATOR (bottom left) */
+#zoombar{position:absolute;left:14px;bottom:14px;right:14px;display:flex;gap:10px;
+  align-items:center;pointer-events:none;z-index:3}
+.stage-dot{flex:1;height:6px;border-radius:99px;background:rgba(255,255,255,.12);
+  transition:background .4s,box-shadow .4s;pointer-events:auto;cursor:pointer}
+.stage-dot.on{background:linear-gradient(90deg,var(--cyan),var(--blue));
+  box-shadow:0 0 12px rgba(47,224,208,.7)}
+.stage-dot.done{background:rgba(47,224,208,.45)}
+
+/* CONTROLS */
+footer{display:flex;justify-content:space-between;align-items:center;gap:18px}
+.states{display:flex;gap:10px}
+.state-btn{font-family:'Outfit',sans-serif;font-size:15px;font-weight:600;
+  padding:10px 18px;border-radius:12px;border:1px solid var(--line);
+  background:rgba(255,255,255,.05);color:#dbe4ff;cursor:pointer;transition:.2s;
+  display:flex;align-items:center;gap:8px}
+.state-btn:hover{background:rgba(255,255,255,.12);transform:translateY(-2px)}
+.state-btn.on{color:#04081c;border-color:transparent}
+.state-btn.solid.on{background:linear-gradient(120deg,var(--blue),#7ec4ff);box-shadow:0 6px 18px rgba(90,169,255,.35)}
+.state-btn.liquid.on{background:linear-gradient(120deg,var(--cyan),#7ff0e0);box-shadow:0 6px 18px rgba(47,224,208,.35)}
+.state-btn.gas.on{background:linear-gradient(120deg,var(--pink),#ff9cd8);box-shadow:0 6px 18px rgba(255,110,199,.35)}
+.state-btn .ico{font-size:18px}
+
+.ctrls{display:flex;gap:10px;align-items:center}
+.btn{font-family:'Outfit',sans-serif;font-size:14px;font-weight:600;cursor:pointer;
+  padding:9px 16px;border:none;border-radius:11px;transition:.2s;display:flex;align-items:center;gap:6px}
+.btn.primary{background:linear-gradient(120deg,var(--cyan),var(--blue));color:#04081c;
+  box-shadow:0 6px 18px rgba(47,224,208,.28)}
+.btn.primary:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(47,224,208,.4)}
+.btn.ghost{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--line)}
+.btn.ghost:hover{background:rgba(255,255,255,.15)}
+
+/* FACTS */
+.facts{position:absolute;right:14px;bottom:50px;display:flex;flex-direction:column;gap:6px;
+  z-index:3;pointer-events:none}
+.fact{background:rgba(10,16,40,.82);backdrop-filter:blur(10px);border:1px solid var(--line);
+  border-radius:10px;padding:7px 12px;font-size:13px;color:#dbe4ff;
+  opacity:0;transform:translateX(20px);transition:opacity .5s,transform .5s}
+.fact.show{opacity:1;transform:translateX(0)}
+.fact b{color:var(--gold)}
+
+/* HINT */
+.hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-family:'Space Grotesk',sans-serif;font-size:13px;letter-spacing:.16em;
+  text-transform:uppercase;color:rgba(255,255,255,.55);pointer-events:none;z-index:4;
+  animation:blink 2.2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:.4}50%{opacity:.9}}
+.hint.hide{display:none}
+
+@media (max-width:900px){
+  h1{font-size:26px}
+  .keyq{display:none}
+  .state-btn{padding:8px 12px;font-size:13px}
+  #stageLabel h3{font-size:16px}
+  #stageLabel p{font-size:12px;max-width:220px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="title">
+      <div class="eyebrow">Year 7 · KS3 Science · <b>Chemistry</b></div>
+      <h1>Zooming into the <span class="grad">particle world</span></h1>
+    </div>
+    <div class="keyq">
+      <div class="tag">🔍 Key question</div>
+      <p>If particles are <b>so small</b>, how can we use a <b>model</b> to understand them?</p>
+    </div>
+  </header>
+
+  <div id="stage">
+    <canvas id="cv"></canvas>
+
+    <div id="hud">
+      <div id="stageLabel">
+        <div class="n">Stage <span id="stageNum">1</span> of 4</div>
+        <h3 id="stageTitle">A block of ice</h3>
+        <p id="stageText">We can see this with our eyes. But what's it really made of?</p>
+      </div>
+      <div id="mag">
+        <div class="n">Magnification</div>
+        <div><span class="v" id="magVal">1</span><span class="u">×</span></div>
+      </div>
+    </div>
+
+    <div class="facts" id="facts">
+      <div class="fact" data-stage="2">🔹 Particles are <b>too small</b> to see individually.</div>
+      <div class="fact" data-stage="3">🔹 Particles are <b>constantly moving</b>.</div>
+      <div class="fact" data-stage="4">🔹 Arrangement &amp; movement differ in <b>solids, liquids &amp; gases</b>.</div>
+    </div>
+
+    <div id="zoombar">
+      <div class="stage-dot on" data-s="0"></div>
+      <div class="stage-dot" data-s="1"></div>
+      <div class="stage-dot" data-s="2"></div>
+      <div class="stage-dot" data-s="3"></div>
+    </div>
+
+    <div class="hint" id="hint">Click anywhere to zoom in</div>
+  </div>
+
+  <footer>
+    <div class="states">
+      <button class="state-btn solid on" data-state="solid"><span class="ico">🧊</span>Solid</button>
+      <button class="state-btn liquid" data-state="liquid"><span class="ico">💧</span>Liquid</button>
+      <button class="state-btn gas" data-state="gas"><span class="ico">💨</span>Gas</button>
+    </div>
+    <div class="ctrls">
+      <button class="btn ghost" id="resetBtn">↺ Restart</button>
+      <button class="btn primary" id="autoBtn">▶ Auto-play</button>
+    </div>
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   PARTICLE ZOOM ANIMATION
+   ============================================================ */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const stage = document.getElementById('stage');
+
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize(){
+  const r = stage.getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = W * DPR; cv.height = H * DPR;
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  buildParticles();
+}
+window.addEventListener('resize', resize);
+
+/* ---------- STAGES ---------- */
+const STAGES = [
+  { name:'A block of ice',
+    text:"We can see this with our eyes. But what's it really made of?",
+    mag:1, zoom:1 },
+  { name:'Getting closer…',
+    text:"Even under a microscope we can't see individual particles.",
+    mag:50, zoom:6 },
+  { name:'The particle world',
+    text:"At last — particles! But they're far too small to see with our eyes.",
+    mag:10_000_000, zoom:40 },
+  { name:'Arrangement & motion',
+    text:"How particles are arranged and how they move explains every property we see.",
+    mag:100_000_000, zoom:60 }
+];
+
+let stageIdx = 0;
+let zoom = 1;        // current visual zoom (smooth)
+let targetZoom = 1;
+let panX = 0, panY = 0, targetPanX = 0, targetPanY = 0;
+let currentState = 'solid';
+let particles = [];
+let t = 0;
+let autoPlay = false;
+let autoTimer = null;
+let hintShown = true;
+
+/* ---------- PARTICLE BUILDER ---------- */
+function buildParticles(){
+  particles = [];
+  // In stage 4 we show a proper arrangement in the visible area
+  // In earlier stages particles are "inside the block" — we render them as a dense field
+  const cx = W/2, cy = H/2;
+
+  if(stageIdx < 3){
+    // Dense cloud of particles representing the interior of the block
+    const count = stageIdx === 0 ? 0 : stageIdx === 1 ? 180 : 260;
+    const spread = stageIdx === 1 ? Math.min(W,H)*0.35 : Math.min(W,H)*0.42;
+    for(let i=0;i<count;i++){
+      const a = Math.random()*Math.PI*2;
+      const r = Math.sqrt(Math.random())*spread;
+      const x = cx + Math.cos(a)*r;
+      const y = cy + Math.sin(a)*r;
+      particles.push(makeParticle(x, y, currentState));
+    }
+  } else {
+    // Stage 4: proper arranged view
+    buildArrangement();
+  }
+}
+
+function makeParticle(x, y, state){
+  const p = { x, y, hx:x, hy:y, vx:0, vy:0, r: state==='gas'?5:7, ph:Math.random()*Math.PI*2 };
+  if(state === 'gas'){
+    const a = Math.random()*Math.PI*2, s = 1.5 + Math.random()*2.5;
+    p.vx = Math.cos(a)*s; p.vy = Math.sin(a)*s;
+  }
+  return p;
+}
+
+function buildArrangement(){
+  particles = [];
+  const cx = W/2, cy = H/2;
+
+  if(currentState === 'solid'){
+    // Regular lattice
+    const cols = 12, rows = 8, sp = 42;
+    const ox = cx - (cols-1)*sp/2;
+    const oy = cy - (rows-1)*sp/2;
+    for(let j=0;j<rows;j++){
+      for(let i=0;i<cols;i++){
+        const x = ox + i*sp, y = oy + j*sp;
+        particles.push({ x, y, hx:x, hy:y, vx:0, vy:0, r:10, ph:Math.random()*Math.PI*2, type:'solid', i, j });
+      }
+    }
+  } else if(currentState === 'liquid'){
+    // Close-packed but random — fill a circular pool
+    const count = 110;
+    const R = Math.min(W,H)*0.32;
+    for(let i=0;i<count;i++){
+      let x, y, tries=0;
+      do{
+        const a = Math.random()*Math.PI*2;
+        const r = Math.sqrt(Math.random())*R;
+        x = cx + Math.cos(a)*r;
+        y = cy + Math.sin(a)*r;
+        tries++;
+      } while(tries<20 && particles.some(p=>Math.hypot(p.x-x,p.y-y)<18));
+      particles.push({ x, y, hx:x, hy:y, vx:0, vy:0, r:9, ph:Math.random()*Math.PI*2, type:'liquid' });
+    }
+  } else {
+    // Gas — sparse, fast
+    const count = 40;
+    for(let i=0;i<count;i++){
+      const x = Math.random()*W*0.9 + W*0.05;
+      const y = Math.random()*H*0.9 + H*0.05;
+      const a = Math.random()*Math.PI*2, s = 2 + Math.random()*3;
+      particles.push({ x, y, hx:x, hy:y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, r:7, ph:Math.random()*Math.PI*2, type:'gas' });
+    }
+  }
+}
+
+/* ---------- STAGE NAVIGATION ---------- */
+function setStage(i){
+  stageIdx = Math.max(0, Math.min(STAGES.length-1, i));
+  const s = STAGES[stageIdx];
+  targetZoom = s.zoom;
+  document.getElementById('stageNum').textContent = stageIdx + 1;
+  document.getElementById('stageTitle').textContent = s.name;
+  document.getElementById('stageText').textContent = s.text;
+  document.getElementById('magVal').textContent = s.mag.toLocaleString();
+
+  // dots
+  document.querySelectorAll('.stage-dot').forEach((d, idx)=>{
+    d.classList.toggle('on', idx === stageIdx);
+    d.classList.toggle('done', idx < stageIdx);
+  });
+
+  // facts
+  document.querySelectorAll('.fact').forEach(f=>{
+    f.classList.toggle('show', +f.dataset.stage <= stageIdx+1 && stageIdx >= 1);
+  });
+
+  // hint
+  if(stageIdx > 0 && hintShown){
+    document.getElementById('hint').classList.add('hide');
+    hintShown = false;
+  }
+
+  buildParticles();
+}
+
+/* ---------- EVENTS ---------- */
+cv.addEventListener('click', ()=>{
+  if(stageIdx < STAGES.length-1){
+    setStage(stageIdx + 1);
+  }
+});
+document.querySelectorAll('.stage-dot').forEach(d=>{
+  d.addEventListener('click', e=>{
+    e.stopPropagation();
+    setStage(+d.dataset.s);
+  });
+});
+document.querySelectorAll('.state-btn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('.state-btn').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    currentState = b.dataset.state;
+    if(stageIdx === 3) buildArrangement();
+  });
+});
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  stopAuto();
+  setStage(0);
+  hintShown = true;
+  document.getElementById('hint').classList.remove('hide');
+});
+document.getElementById('autoBtn').addEventListener('click', toggleAuto);
+
+function toggleAuto(){
+  autoPlay = !autoPlay;
+  const btn = document.getElementById('autoBtn');
+  btn.textContent = autoPlay ? '⏸ Pause' : '▶ Auto-play';
+  if(autoPlay){
+    if(stageIdx === 0){ setStage(1); }
+    scheduleNext();
+  } else {
+    clearTimeout(autoTimer);
+  }
+}
+function scheduleNext(){
+  if(!autoPlay) return;
+  autoTimer = setTimeout(()=>{
+    if(stageIdx < STAGES.length-1){
+      setStage(stageIdx + 1);
+      scheduleNext();
+    } else {
+      autoPlay = false;
+      document.getElementById('autoBtn').textContent = '▶ Auto-play';
+    }
+  }, 3200);
+}
+function stopAuto(){
+  autoPlay = false;
+  clearTimeout(autoTimer);
+  document.getElementById('autoBtn').textContent = '▶ Auto-play';
+}
+
+/* ---------- RENDER ---------- */
+function drawBlock(){
+  // Draw a stylised ice block in the centre
+  const cx = W/2, cy = H/2;
+  const size = Math.min(W,H)*0.38;
+  const x = cx - size/2, y = cy - size/2;
+
+  // soft shadow
+  ctx.save();
+  ctx.filter = 'blur(30px)';
+  ctx.fillStyle = 'rgba(90,169,255,.25)';
+  ctx.fillRect(x-10, y+size-10, size+20, 40);
+  ctx.restore();
+
+  // block body
+  const grad = ctx.createLinearGradient(x, y, x+size, y+size);
+  grad.addColorStop(0, 'rgba(180,220,255,.55)');
+  grad.addColorStop(0.5, 'rgba(120,180,240,.40)');
+  grad.addColorStop(1, 'rgba(80,140,220,.50)');
+  ctx.fillStyle = grad;
+  roundRect(x, y, size, size, 18);
+  ctx.fill();
+
+  // highlight
+  ctx.strokeStyle = 'rgba(255,255,255,.35)';
+  ctx.lineWidth = 2;
+  roundRect(x, y, size, size, 18);
+  ctx.stroke();
+
+  // inner shine
+  ctx.fillStyle = 'rgba(255,255,255,.18)';
+  roundRect(x+14, y+14, size*0.4, size*0.2, 10);
+  ctx.fill();
+
+  // cracks
+  ctx.strokeStyle = 'rgba(255,255,255,.25)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(x+size*0.3, y+size*0.2);
+  ctx.lineTo(x+size*0.5, y+size*0.5);
+  ctx.lineTo(x+size*0.4, y+size*0.8);
+  ctx.moveTo(x+size*0.5, y+size*0.5);
+  ctx.lineTo(x+size*0.75, y+size*0.6);
+  ctx.stroke();
+
+  // label
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  ctx.font = '600 14px "Space Grotesk"';
+  ctx.textAlign = 'center';
+  ctx.fillText('ICE', cx, cy + size/2 + 30);
+}
+
+function roundRect(x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+
+function drawParticle(p, col){
+  // glow
+  ctx.globalAlpha = 0.22;
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.r*1.9, 0, Math.PI*2);
+  ctx.fill();
+  // body
+  ctx.globalAlpha = 1;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+  ctx.fill();
+  // highlight
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(p.x - p.r*0.3, p.y - p.r*0.32, p.r*0.32, 0, Math.PI*2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function stateColor(){
+  if(currentState === 'solid') return '#5aa9ff';
+  if(currentState === 'liquid') return '#2fe0d0';
+  return '#ff6ec7';
+}
+
+function updateParticles(){
+  t += 0.016;
+  const col = stateColor();
+
+  if(stageIdx === 3){
+    // Proper physics per state
+    if(currentState === 'solid'){
+      for(const p of particles){
+        p.x = p.hx + Math.sin(t*1.8 + p.ph)*2.5;
+        p.y = p.hy + Math.cos(t*2.2 + p.ph)*2.5;
+      }
+      // bonds
+      ctx.strokeStyle = 'rgba(90,169,255,.35)';
+      ctx.lineWidth = 1.5;
+      for(const p of particles){
+        if(p.type !== 'solid') continue;
+        for(const q of particles){
+          if(q.type !== 'solid') continue;
+          if((q.i === p.i+1 && q.j === p.j) || (q.j === p.j+1 && q.i === p.i)){
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(q.x, q.y);
+            ctx.stroke();
+          }
+        }
+      }
+    } else if(currentState === 'liquid'){
+      for(const p of particles){
+        p.vx += (Math.random()-0.5)*0.35;
+        p.vy += (Math.random()-0.5)*0.35 + 0.08;
+        p.vx *= 0.96; p.vy *= 0.96;
+        p.x += p.vx; p.y += p.vy;
+        // keep inside circular pool
+        const cx = W/2, cy = H/2, R = Math.min(W,H)*0.32;
+        const dx = p.x-cx, dy = p.y-cy, d = Math.hypot(dx,dy);
+        if(d > R-10){
+          const nx = dx/d, ny = dy/d;
+          p.x = cx + nx*(R-10);
+          p.y = cy + ny*(R-10);
+          p.vx -= nx*1.5; p.vy -= ny*1.5;
+        }
+      }
+      // soft repulsion
+      for(let i=0;i<particles.length;i++){
+        for(let j=i+1;j<particles.length;j++){
+          const a = particles[i], b = particles[j];
+          const dx = b.x-a.x, dy = b.y-a.y, d = Math.hypot(dx,dy);
+          if(d < 18 && d > 0.01){
+            const push = (18-d)*0.3, nx = dx/d, ny = dy/d;
+            a.x -= nx*push*0.5; a.y -= ny*push*0.5;
+            b.x += nx*push*0.5; b.y += ny*push*0.5;
+          }
+        }
+      }
+    } else {
+      // gas
+      for(const p of particles){
+        p.x += p.vx; p.y += p.vy;
+        if(p.x < 30){ p.x = 30; p.vx = Math.abs(p.vx); }
+        if(p.x > W-30){ p.x = W-30; p.vx = -Math.abs(p.vx); }
+        if(p.y < 30){ p.y = 30; p.vy = Math.abs(p.vy); }
+        if(p.y > H-30){ p.y = H-30; p.vy = -Math.abs(p.vy); }
+      }
+    }
+  } else {
+    // Stages 1 & 2: gentle drift
+    for(const p of particles){
+      p.x = p.hx + Math.sin(t*0.8 + p.ph)*3;
+      p.y = p.hy + Math.cos(t*0.9 + p.ph*1.3)*3;
+    }
+  }
+}
+
+function render(){
+  ctx.clearRect(0, 0, W, H);
+
+  // smooth zoom interpolation
+  zoom += (targetZoom - zoom)*0.08;
+
+  // stage 0: draw the block
+  if(stageIdx === 0){
+    drawBlock();
+  } else {
+    // subtle vignette
+    const vg = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.2, W/2, H/2, Math.max(W,H)*0.7);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,.4)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+
+    updateParticles();
+
+    const col = stateColor();
+    for(const p of particles) drawParticle(p, col);
+
+    // stage 4: state label
+    if(stageIdx === 3){
+      ctx.fillStyle = 'rgba(255,255,255,.75)';
+      ctx.font = '600 14px "Space Grotesk"';
+      ctx.textAlign = 'left';
+      const label = currentState === 'solid' ? '🧊 SOLID · regular lattice, vibrating' :
+                    currentState === 'liquid' ? '💧 LIQUID · close but random, sliding' :
+                                                '💨 GAS · far apart, fast & random';
+      ctx.fillText(label, 20, H - 20);
+    }
+  }
+
+  requestAnimationFrame(render);
+}
+
+/* ---------- INIT ---------- */
+resize();
+setStage(0);
+render();
+</script>
+</body>
+</html>
